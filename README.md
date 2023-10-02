@@ -50,24 +50,25 @@ reliable_upload_pro is a Flutter package that provides support for reliable file
 > timeout: Set the timeout duration for each upload request. Default is 60 seconds.
 
 # Sample code:
-------------------------------------------------------------------------
-client = UploadClient(
-    file: file,
-    cache: _localCache,
-    blobConfig: BlobConfig(blobUrl: blobUrl, sasToken: sasToken),
+
+-----------------------------------------------
+
+    client = UploadClient(
+        file: file,
+        cache: _localCache,
+        blobConfig: BlobConfig(blobUrl: blobUrl, sasToken: sasToken),
+        );
+    client!.uploadBlob(
+        onProgress: (count, total, response) {
+            // Handle progress updates
+        },
+        onComplete: (path, response) {
+            // Handle complete updates
+        },
+        onFailed: (e, {message}) {
+            // Handle upload failed
+        },
     );
-client!.uploadBlob(
-    onProgress: (count, total, response) {
-        // Handle progress updates
-    },
-    onComplete: (path, response) {
-        // Handle complete updates
-    },
-    onFailed: (e, {message}) {
-        // Handle upload failed
-    },
-);
----------------------------------------------------------------------
 
 # Contributing
 We welcome contributions to this package. Feel free to open issues and pull requests to suggest improvements or report bugs.
