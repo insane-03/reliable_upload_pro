@@ -39,6 +39,8 @@ class _MyHomePageState extends State<MyHomePage> {
   String process = '0%';
   late UploadClient? client;
   final LocalCache _localCache = LocalCache();
+  List<String> listCache = ['test'];
+  CancelToken? _cancelToken;
 
   uploadFunc() async {
     final filePath = await filePathPicker();
@@ -48,12 +50,12 @@ class _MyHomePageState extends State<MyHomePage> {
         'https://worksamplestorageaccount.blob.core.windows.net/kyn-blob-video/$blobName';
     const String sasToken =
         'sv=2022-11-02&ss=bf&srt=co&se=2023-10-04T18%3A38%3A59Z&sp=rwl&sig=ZJ%2Bb7mD3M6eBtZDMcctwgD0DTaHqg%2FLYmsjiHzcUyvc%3D';
-
+    _cancelToken = CancelToken();
     try {
       client = UploadClient(
           file: file,
           blobConfig: BlobConfig(blobUrl: blobUrl, sasToken: sasToken),
-          cancelTokenDio: CancelToken(),
+          cancelTokenDio: _cancelToken,
           cache: _localCache);
       client!.uploadBlob(
           onProgress: (count, total, response) {
@@ -103,6 +105,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    List<String> cache;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -121,6 +124,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             InkWell(
               onTap: () {
+                _cancelToken?.cancel('user.cancel');
                 setState(() {
                   process = 'Cancelled';
                 });
@@ -142,17 +146,34 @@ class _MyHomePageState extends State<MyHomePage> {
                       _localCache.clearAll(),
                       setState(() {
                         process = '0%';
+                        listCache = [];
                       })
                     },
                 icon: const Icon(Icons.cancel),
                 label: const Text('clear cache')),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-                onPressed: () => {
-                      _localCache.getAll(),
+                onPressed: () async => {
+                      cache = await _localCache.getAll(),
+                      setState(() => {
+                            listCache = cache,
+                            process = '0%',
+                          })
                     },
                 icon: const Icon(Icons.show_chart),
-                label: const Text('show cached'))
+                label: const Text('show cached')),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 100,
+              width: 250,
+              child: ListView.separated(
+                itemCount: listCache.length,
+                separatorBuilder: (context, index) => const Divider(),
+                itemBuilder: (context, index) {
+                  return Text(listCache[index]);
+                },
+              ),
+            )
           ],
         ),
       ),

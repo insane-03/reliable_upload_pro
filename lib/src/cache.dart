@@ -54,7 +54,7 @@ class LocalCache implements UploadCache {
     return MetaData.fromJson(jsonDecode(data));
   }
 
-  Future<void> getAll() async {
+  Future<List<String>> getAll() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.reload();
     Set<String> keys = prefs.getKeys();
@@ -65,6 +65,7 @@ class LocalCache implements UploadCache {
         log("Key: $key");
       }
     }
+    return keys.isNotEmpty ? keys.toList() : [' No Cache found'];
   }
 
   @override

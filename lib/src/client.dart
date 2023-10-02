@@ -33,6 +33,7 @@ class UploadClient {
   final Duration timeout;
   int totalChunkCount = 0;
   CancelToken? cancelTokenDio;
+  // DateTime? startTime;
 
   UploadClient(
       {required this.file,
@@ -72,7 +73,7 @@ class UploadClient {
     final commitUri = blobConfig!.getCommitUri();
 
     if (!metaData.isChucksUploadCompleted &&
-        metaData.chunkCount < totalChunkCount) {
+        metaData.chunkCount != totalChunkCount) {
       await uploadChunk(blobConfig!.getBlockUri);
     }
 
@@ -84,7 +85,8 @@ class UploadClient {
       print(blockListXml);
       final response = await _commitUpload(commitUri, blockListXml);
       if (response?.statusCode == 201) {
-        _onComplete?.call(response!.requestOptions.path, response);
+        _onComplete?.call(
+            response!.realUri.origin + response.realUri.path, response);
         cache.delete(metaData.key);
       }
     }
@@ -109,12 +111,21 @@ class UploadClient {
         Response? response = await Dio().put(
           url,
           data: Stream.fromIterable(chunkData.map((e) => [e])),
-          options: Options(headers: {
-            'x-ms-blob-type': 'BlockBlob',
-            'Content-Length': chunkData.length,
-          }, contentType: 'video/mp4'),
+          options: Options(
+            headers: {
+              'x-ms-blob-type': 'BlockBlob',
+              'Content-Length': chunkData.length,
+            },
+            contentType: getContentType(file.path),
+          ),
           onSendProgress: (count, total) {
-            _onProgress?.call(count, total, null);
+            // Calculate progress for the current chunk
+            final chunkProgress =
+                ((metaData.chunkCount * chunkSize + count) / fileSize * 100)
+                    .toDouble();
+            final limitedProgress =
+                chunkProgress.clamp(0, 100); // Limit progress to 100
+            _onProgress?.call(limitedProgress.toInt(), 100, null);
           },
           cancelToken: cancelTokenDio,
         );
@@ -124,7 +135,12 @@ class UploadClient {
           offset += chunkData.length;
           metaData.offset = offset;
           metaData.chunkCount++;
-          _onProgress?.call(offset, fileSize, response);
+          // Calculate total progress for all chunks
+          final totalProgress =
+              (metaData.chunkCount * chunkSize / fileSize * 100).toDouble();
+          final limitedTotalProgress =
+              totalProgress.clamp(0, 100); // Limit total progress to 100
+          _onProgress?.call(limitedTotalProgress.toInt(), 100, response);
           if (offset >= fileSize) {
             metaData.isChucksUploadCompleted = true;
             break;
@@ -134,6 +150,7 @@ class UploadClient {
       } catch (error) {
         cache.set(metaData);
         _onFailed?.call(error, message: 'failed');
+        cancelTokenDio?.cancel();
         break;
       }
     }
@@ -148,6 +165,9 @@ class UploadClient {
       Response commitResponse = await Dio().put(
         commitUri,
         data: body,
+        options: Options(
+          contentType: getContentType(file.path),
+        ),
         cancelToken: cancelTokenDio,
       );
       if (commitResponse.statusCode == 201) {
@@ -158,6 +178,7 @@ class UploadClient {
       return commitResponse;
     } catch (error) {
       _onFailed?.call(error, message: 'failed');
+      cancelTokenDio?.cancel();
       return null;
     }
   }
@@ -187,7 +208,76 @@ class UploadClient {
       file.path.split('/').last.replaceAll(RegExp(r'\W+'), '');
 
   String generateBlockId(int index) {
-    final String blockId = 'kyn-${index.toString()}-${const Uuid().v4()}';
-    return base64.encode(utf8.encode(blockId));
+    final String blockId =
+        'kyn-${index.toString()}-${const Uuid().v4().replaceAll('-', '')}';
+    final String encodedBlockId = base64.encode(utf8.encode(blockId));
+    if (encodedBlockId.length > 88) {
+      return encodedBlockId.substring(0, 88);
+    } else {
+      return encodedBlockId;
+    }
   }
+
+  // Function to determine content type based on file extension
+  String getContentType(String filePath) {
+    final fileExtension = filePath.split('.').last.toLowerCase();
+    switch (fileExtension) {
+      case 'mp4':
+        return 'video/mp4';
+      case 'avi':
+        return 'video/avi';
+      case 'mkv':
+        return 'video/x-matroska';
+      case 'png':
+        return 'video/png';
+      // Add more file extensions and content types as needed
+      default:
+        return 'application/octet-stream'; // Default content type
+    }
+  }
+
+  // void timeLeftToUpload(int count, int total, Response? response) {
+  //   if (startTime == null) {
+  //     startTime = DateTime.now();
+  //     return;
+  //   }
+
+  //   final currentTime = DateTime.now();
+  //   final elapsedTime = currentTime.difference(startTime!);
+
+  //   if (count > 0 && total > 0) {
+  //     final bytesUploaded = metaData.chunkCount * chunkSize + count;
+  //     final bytesRemaining = fileSize - bytesUploaded;
+
+  //     final uploadSpeed =
+  //         bytesUploaded / elapsedTime.inSeconds; // Bytes per second
+  //     final timeLeftInSeconds = bytesRemaining / uploadSpeed;
+
+  //     final formattedTimeLeft = _formatTimeLeft(timeLeftInSeconds);
+
+  //     print('Time left to upload: $formattedTimeLeft');
+  //   }
+  // }
+
+  // String _formatTimeLeft(double seconds) {
+  //   final int hours = (seconds / 3600).floor();
+  //   final int minutes = ((seconds % 3600) / 60).floor();
+  //   final int remainingSeconds = (seconds % 60).floor();
+
+  //   final List<String> parts = [];
+
+  //   if (hours > 0) {
+  //     parts.add('$hours h');
+  //   }
+
+  //   if (minutes > 0) {
+  //     parts.add('$minutes min');
+  //   }
+
+  //   if (remainingSeconds > 0) {
+  //     parts.add('$remainingSeconds sec');
+  //   }
+
+  //   return parts.join(' ');
+  // }
 }
