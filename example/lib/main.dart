@@ -1,4 +1,6 @@
+import 'dart:developer';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:reliable_upload_pro/reliable_upload_pro.dart';
@@ -51,6 +53,7 @@ class _MyHomePageState extends State<MyHomePage> {
       client = UploadClient(
           file: file,
           blobConfig: BlobConfig(blobUrl: blobUrl, sasToken: sasToken),
+          cancelTokenDio: CancelToken(),
           cache: _localCache);
       client!.uploadBlob(
           onProgress: (count, total, response) {
@@ -63,6 +66,8 @@ class _MyHomePageState extends State<MyHomePage> {
             setState(() {
               process = 'Completed';
             });
+            log(path);
+            return path;
           },
           onFailed: (e, {message}) => {
                 setState(() {

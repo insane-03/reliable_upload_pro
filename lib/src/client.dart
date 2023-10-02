@@ -12,9 +12,9 @@ import 'package:reliable_upload_pro/src/metadata.dart';
 typedef ProgressCallback = void Function(
     int count, int total, Response? response);
 
-typedef CompleteCallback = void Function(String path, Response response);
+typedef CompleteCallback = String Function(String path, Response response);
 
-typedef FailedCallback = void Function(Object? e, {String? message});
+typedef FailedCallback = Object Function(Object? e, {String? message});
 
 class UploadClient {
   final File file;
@@ -32,14 +32,16 @@ class UploadClient {
   final UploadCache cache;
   final Duration timeout;
   int totalChunkCount = 0;
+  CancelToken? cancelTokenDio;
 
-  UploadClient({
-    required this.file,
-    this.blobConfig,
-    int? chunkSize,
-    UploadCache? cache,
-    Duration? timeout,
-  })  : chunkSize = chunkSize ?? 4 * 1024 * 1024,
+  UploadClient(
+      {required this.file,
+      this.blobConfig,
+      int? chunkSize,
+      UploadCache? cache,
+      Duration? timeout,
+      CancelToken? cancelTokenDio})
+      : chunkSize = chunkSize ?? 4 * 1024 * 1024,
         cache = cache ?? MemoryCache(),
         chunkCount = 0,
         timeout = timeout ?? const Duration(seconds: 30) {
@@ -114,6 +116,7 @@ class UploadClient {
           onSendProgress: (count, total) {
             _onProgress?.call(count, total, null);
           },
+          cancelToken: cancelTokenDio,
         );
         print(response.statusCode);
         if (response.statusCode == 201) {
@@ -142,7 +145,11 @@ class UploadClient {
 
   Future<Response?> _commitUpload(commitUri, dynamic body) async {
     try {
-      Response commitResponse = await Dio().put(commitUri, data: body);
+      Response commitResponse = await Dio().put(
+        commitUri,
+        data: body,
+        cancelToken: cancelTokenDio,
+      );
       if (commitResponse.statusCode == 201) {
         cache.delete(fingerPrint);
         return commitResponse;
